@@ -1,0 +1,26 @@
+[package]
+name = "queenmod"
+version = "0.1.0"
+authors = ["Robert Jördens <rj@quartiq.de>"]
+
+[dependencies]
+cortex-m = "0.4.3"
+cortex-m-rt = "0.4.0"
+cortex-m-semihosting = "0.2.0"
+panic-semihosting = "0.3.0"
+# panic-abort = "0.2.0"
+byteorder = { version = "1.2.2", default-features = false }
+stm32f4 = { version = "0.1.0", features = ["stm32f427", "rt"] }
+
+[build-dependencies]
+built = "0.2.3"
+
+[profile.dev]
+codegen-units = 1
+incremental = false
+
+[profile.release]
+debug = true
+lto = true
+codegen-units = 1
+incremental = false
