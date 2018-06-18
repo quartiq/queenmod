@@ -3,14 +3,17 @@ name = "queenmod"
 version = "0.1.0"
 authors = ["Robert Jördens <rj@quartiq.de>"]
 
+[features]
+bkpt = [ ]
+itm = [ ]
+simd = [ ]
+
 [dependencies]
-cortex-m = "0.4.3"
-cortex-m-rt = "0.4.0"
-cortex-m-semihosting = "0.2.0"
-panic-semihosting = "0.3.0"
-# panic-abort = "0.2.0"
-byteorder = { version = "1.2.2", default-features = false }
-stm32f4 = { version = "0.1.0", features = ["stm32f427", "rt"] }
+cortex-m = "0.5"
+cortex-m-rt = "0.5"
+panic-itm = "0.2"
+panic-abort = "0.2"
+stm32f4 = { version = "0.2", features = ["stm32f446", "rt"] }
 
 [build-dependencies]
 built = "0.2.3"
