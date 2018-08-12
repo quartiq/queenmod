@@ -49,7 +49,7 @@
 ```
 rustup override add nightly
 rustup install nightly
-rustup target add thumbv7m-none-eabi
+rustup target add thumbv7em-none-eabi
 
 cargo install itm  # features=itm
 mkfifo itm.fifo  # features=itm
