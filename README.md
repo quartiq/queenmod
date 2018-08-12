@@ -36,16 +36,23 @@
 
 * DAC output PA4, PA5
 
-# Build Notes
+# Build
+
+## Features
+
+* **itm**: use the ITM cell for debugging output
+* **simd**: use DSP SIMDs for MACC
+* **bkpt**: place breakpoints around the ISR for timing
+
+## Commands
 
 ```
-cargo install itm
-
 rustup override add nightly
 rustup install nightly
 rustup target add thumbv7m-none-eabi
 
-mkfifo itm.fifo
+cargo install itm  # features=itm
+mkfifo itm.fifo  # features=itm
 openocd -f stm32f446-nucleo64.cfg
 cargo run --release
 itmdump -f itm.fifo
