@@ -466,9 +466,9 @@ fn dma2_stream4(iir_state: &mut [[IIRState; 2]; 2]) {
         dma.hifcr.write(|w| w.ctcif4().set_bit());
         let ct = 1 - dma.s4cr.read().ct() as usize;
         let mut y: [i16; 2] = [0; 2];
-        let a = unsafe { ADC_SAMPLES.get_unchecked(ct) };
-        let fir = unsafe { FIRX.get_unchecked(FIR_MODE) };
-        let iir = unsafe { IIRX.get_unchecked(IIR_MODE) };
+        let a = unsafe { &ADC_SAMPLES[ct] };
+        let fir = &FIRX[unsafe { FIR_MODE }];
+        let iir = &IIRX[unsafe { IIR_MODE }];
         for i in 0..2 {
             y[i] = fir[i].apply(a);
             for j in 0..2 {
