@@ -301,9 +301,8 @@ fn main() -> ! {
 pub fn arm_smlald(a: i16x2, b: i16x2, c: i64) -> i64;
 */
 
-#[inline(always)]
 fn macc(y0: i16, x: &[i16], a: &[i16],
-        width: u8, shift: u8) -> i16 {
+        shift: u8) -> i16 {
     let y = match () {
         #[cfg(not(feature = "simd"))]
         _ => {
@@ -331,7 +330,7 @@ fn macc(y0: i16, x: &[i16], a: &[i16],
             y.0
         }
     };
-    let mask = 1 << width;
+    let mask = 1 << 15;
     (y >> shift).max(-mask).min(mask - 1) as i16
 }
 
@@ -339,7 +338,6 @@ type IIRState = [i16; 5];
 
 struct IIR {
     ba: IIRState,
-    width: u8,
     shift: u8,
 }
 
@@ -347,7 +345,7 @@ impl IIR {
     fn update(&self, xy: &mut IIRState, x0: i16) -> i16 {
         xy.rotate_right(1);
         xy[0] = x0;
-        let y0 = macc(0, xy, &self.ba, self.width, self.shift);
+        let y0 = macc(0, xy, &self.ba, self.shift);
         xy[xy.len()/2] = y0;
         y0
     }
@@ -358,13 +356,12 @@ type FIRState = [i16; N_SAMPLES];
 struct FIR {
     a: FIRState,
     offset: i16,
-    width: u8,
     shift: u8,
 }
 
 impl FIR {
     fn apply(&self, x: &FIRState) -> i16 {
-        macc(self.offset, x, &self.a, self.width, self.shift)
+        macc(self.offset, x, &self.a, self.shift)
     }
 }
 
@@ -372,39 +369,39 @@ static mut FIR_MODE: usize = 0;
 const FIR_LEN: usize = 5;
 static FIRX: [[FIR; 2]; FIR_LEN] = [
     [ // fundamental t_mod
-        FIR{ shift: 11, width: 15, offset: 0, a:
+        FIR{ shift: 11, offset: 0, a:
                 [0, 1247, 2304, 3011, 3259, 3011, 2304, 1247,
                     0, -1247, -2304, -3011, -3259, -3011, -2304, -1247] },
-        FIR{ shift: 11, width: 15, offset: 0, a:
+        FIR{ shift: 11, offset: 0, a:
                 [-3259, -3011, -2304, -1247, 0, 1247, 2304, 3011,
                     3259, 3011, 2304, 1247, 0, -1247, -2304, -3011] },
     ],
     [ // second harmonic t_mod/2
-        FIR{ shift: 11, width: 15, offset: 0, a:
+        FIR{ shift: 11, offset: 0, a:
                 [0, 2399, 3393, 2399, 0, -2399, -3393, -2399,
                     0, 2399, 3393, 2399, 0, -2399, -3393, -2399] },
-        FIR{ shift: 11, width: 15, offset: 0, a:
+        FIR{ shift: 11, offset: 0, a:
                 [-3393, -2399, 0, 2399, 3393, 2399, 0, -2399,
                     -3393, -2399, 0, 2399, 3393, 2399, 0, -2399] },
     ],
     [ // third harmonic t_mod/3
-        FIR{ shift: 11, width: 15, offset: 0, a:
+        FIR{ shift: 11, offset: 0, a:
                 [0, 3011, 2304, -1247, -3259, -1247, 2304, 3011,
                     0, -3011, -2304, 1247, 3259, 1247, -2304, -3011] },
-        FIR{ shift: 11, width: 15, offset: 0, a:
+        FIR{ shift: 11, offset: 0, a:
                 [-3259, -1247, 2304, 3011, 0, -3011, -2304, 1247,
                     3259, 1247, -2304, -3011, 0, 3011, 2304, -1247] },
     ],
     [ // square fundamental
-        FIR{ shift: 0, width: 15, offset: 0, a:
+        FIR{ shift: 0, offset: 0, a:
                 [1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1] },
-        FIR{ shift: 0, width: 15, offset: 0, a:
+        FIR{ shift: 0, offset: 0, a:
                 [1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1] },
     ],
     [ // zero and dc
-        FIR{ shift: 0, width: 15, offset: 0, a:
+        FIR{ shift: 0, offset: 0, a:
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-        FIR{ shift: 4, width: 15, offset: 0, a:
+        FIR{ shift: 4, offset: 0, a:
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] },
     ],
 ];
@@ -413,16 +410,16 @@ static mut IIR_MODE: usize = 0;
 const IIR_LEN: usize = 3;
 static IIRX: [[IIR; 2]; IIR_LEN] = [
     [// butter(4, .2)
-        IIR{ shift: 12, width: 15, ba: [200, 400, 200, 4295, -1213] },
-        IIR{ shift: 12, width: 15, ba: [4096, 8192, 4096, 5410, -2592] },
+        IIR{ shift: 12, ba: [200, 400, 200, 4295, -1213] },
+        IIR{ shift: 12, ba: [4096, 8192, 4096, 5410, -2592] },
     ],
     [ // id
-        IIR{ shift: 0, width: 15, ba: [1, 0, 0, 0, 0] },
-        IIR{ shift: 0, width: 15, ba: [1, 0, 0, 0, 0] },
+        IIR{ shift: 0, ba: [1, 0, 0, 0, 0] },
+        IIR{ shift: 0, ba: [1, 0, 0, 0, 0] },
     ],
     [ // PII
-        IIR{ shift: 13, width: 15, ba: [400, 400, 0, 8184, 0] },
-        IIR{ shift: 0, width: 15, ba: [1, 0, 0, 0, 0] },
+        IIR{ shift: 13, ba: [400, 400, 0, 8184, 0] },
+        IIR{ shift: 0, ba: [1, 0, 0, 0, 0] },
     ],
 ];
 
