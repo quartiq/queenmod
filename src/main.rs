@@ -360,6 +360,7 @@ struct FIR {
 }
 
 impl FIR {
+    #[inline(never)]
     fn apply(&self, x: &FIRState) -> i16 {
         macc(self.offset, x, &self.a, self.shift)
     }
