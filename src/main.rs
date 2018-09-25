@@ -2,18 +2,18 @@
 #![no_main]
 #![feature(asm)]
 
-#[cfg_attr(feature = "itm", macro_use(iprint))]
 extern crate cortex_m;
-#[macro_use(entry,exception)]
 extern crate cortex_m_rt;
 #[cfg(feature = "itm")]
 extern crate panic_itm;
 #[cfg(not(feature = "itm"))]
 extern crate panic_abort;
-#[macro_use(interrupt)]
 extern crate stm32f4;
 
-use stm32f4::stm32f446;
+#[cfg(feature = "itm")]
+use cortex_m::iprint;
+use cortex_m_rt::{entry, exception};
+use stm32f4::{stm32f446, interrupt};
 
 const N_SAMPLES: usize = 16;
 
@@ -267,7 +267,7 @@ fn dma2_init(dma2: &mut stm32f446::DMA2, par: u32) {
     dma2.s4cr.modify(|_, w| w.en().enabled());
 }
 
-entry!(main);
+#[entry]
 fn main() -> ! {
     cortex_m::interrupt::free(|_cs| {
         let mut peripherals = stm32f446::Peripherals::take().unwrap();
@@ -485,8 +485,9 @@ fn dma2_stream4(iir_state: &mut [[IIRState; 2]; 2]) {
     cortex_m::asm::bkpt();
 }
 
-exception!(SysTick, sys_tick, state: u32 = 0);
-fn sys_tick(t: &mut u32) {
+#[exception]
+fn SysTick() -> ! {
+    static mut t: u32 = 0;
     let peripherals = unsafe { stm32f446::Peripherals::steal() };
     match debounce(peripherals.GPIOC.idr.read().idr13().bit_is_clear(), t) {
         Some(Debounce::Short) =>
@@ -518,12 +519,12 @@ fn debounce(signal: bool, time: &mut u32) -> Option<Debounce> {
     ret
 }
 
-exception!(HardFault, hard_fault);
-fn hard_fault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
+#[exception]
+fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
     panic!("HardFault at {:#?}", ef);
 }
 
-exception!(*, default_handler);
-fn default_handler(irqn: i16) {
+#[exception]
+fn DefaultHandler(irqn: i16) {
     panic!("Unhandled exception (IRQn = {})", irqn);
 }
