@@ -301,8 +301,7 @@ fn main() -> ! {
 pub fn arm_smlald(a: i16x2, b: i16x2, c: i64) -> i64;
 */
 
-fn macc(y0: i16, x: &[i16], a: &[i16],
-        shift: u8) -> i16 {
+fn macc(y0: i16, x: &[i16], a: &[i16], shift: u8) -> i16 {
     let y = match () {
         #[cfg(not(feature = "simd"))]
         _ => {
@@ -330,8 +329,7 @@ fn macc(y0: i16, x: &[i16], a: &[i16],
             y.0
         }
     };
-    let mask = 1 << 15;
-    (y >> shift).max(-mask).min(mask - 1) as i16
+    (y >> shift).max(i16::min_value() as i32).min(i16::max_value() as i32) as i16
 }
 
 type IIRState = [i16; 5];
