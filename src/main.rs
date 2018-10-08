@@ -156,8 +156,8 @@ fn io_init(gpioa: &mut stm32f446::GPIOA, gpioc: &mut stm32f446::GPIOC) {
 /// Set up timer TIM2 to emit square pulses on OC1
 fn tim2_init(tim2: &mut stm32f446::TIM2) {
     tim2.psc.write(|w| unsafe { w.psc().bits(4 * (12 + 3) - 1) });
-    tim2.arr.write(|w| unsafe { w.arr_l().bits(N_SAMPLES as u16 - 1) } );
-    tim2.ccr1.write(|w| unsafe { w.ccr1_l().bits(N_SAMPLES as u16 / 2) } );
+    tim2.arr.write(|w| w.arr().bits(N_SAMPLES as u32 - 1));
+    tim2.ccr1.write(|w| w.ccr1().bits(N_SAMPLES as u32 / 2));
     tim2.ccmr1_output.modify(|_, w| unsafe {
         w.oc1m().bits(0b110)
          .oc1pe().set_bit() });
@@ -165,8 +165,8 @@ fn tim2_init(tim2: &mut stm32f446::TIM2) {
         w.cc1p().clear_bit()  // active high
          .cc1e().set_bit());  // enable
     tim2.egr.write(|w| w.ug().set_bit());
-    tim2.cr2.modify(|_, w| unsafe {
-        w.mms().bits(0b010) });  // UEV
+    tim2.cr2.modify(|_, w|
+        w.mms().bits(0b010));  // UEV
     tim2.cr1.modify(|_, w| unsafe {
         w.ckd().bits(0)  // div1
          .dir().clear_bit()  // up
