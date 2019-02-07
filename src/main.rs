@@ -13,7 +13,7 @@ extern crate stm32f4;
 #[cfg(feature = "itm")]
 use cortex_m::iprint;
 use cortex_m_rt::{entry, exception};
-use stm32f4::{stm32f446, interrupt};
+use stm32f4::{stm32f446, stm32f446::interrupt};
 
 const N_SAMPLES: usize = 16;
 
@@ -284,7 +284,7 @@ fn main() -> ! {
         io_init(&mut peripherals.GPIOA, &mut peripherals.GPIOC);
         dac_init(&mut peripherals.DAC);
         dma2_init(&mut peripherals.DMA2, &peripherals.ADC1.dr as *const _ as u32);
-        core_peripherals.NVIC.clear_pending(stm32f446::Interrupt::DMA2_STREAM4);
+        stm32f446::NVIC::unpend(stm32f446::Interrupt::DMA2_STREAM4);
         core_peripherals.NVIC.enable(stm32f446::Interrupt::DMA2_STREAM4);
         adc1_init(&mut peripherals.ADC_COMMON, &mut peripherals.ADC1);
         tim2_init(&mut peripherals.TIM2);
@@ -422,9 +422,9 @@ static IIRX: [[IIR; 2]; IIR_LEN] = [
     ],
 ];
 
-interrupt!(DMA2_STREAM4, dma2_stream4,
-           state: [[IIRState; 2]; 2] = [[[0; 5]; 2]; 2]);
-fn dma2_stream4(iir_state: &mut [[IIRState; 2]; 2]) {
+#[interrupt]
+fn DMA2_STREAM4() {
+    static mut IIR_STATE: [[IIRState; 2]; 2] = [[[0; 5]; 2]; 2];
     #[cfg(feature = "bkpt")]
     cortex_m::asm::bkpt();
     let mut peripherals = unsafe { stm32f446::Peripherals::steal() };
@@ -468,7 +468,7 @@ fn dma2_stream4(iir_state: &mut [[IIRState; 2]; 2]) {
         for i in 0..2 {
             y[i] = fir[i].apply(a);
             for j in 0..2 {
-                y[i] = iir[j].update(&mut iir_state[i][j], y[i]);
+                y[i] = iir[j].update(&mut IIR_STATE[i][j], y[i]);
             }
             y[i] = (y[i] >> 4) + 0x800;
         }
@@ -487,9 +487,9 @@ fn dma2_stream4(iir_state: &mut [[IIRState; 2]; 2]) {
 
 #[exception]
 fn SysTick() -> ! {
-    static mut t: u32 = 0;
+    static mut T: u32 = 0;
     let peripherals = unsafe { stm32f446::Peripherals::steal() };
-    match debounce(peripherals.GPIOC.idr.read().idr13().bit_is_clear(), t) {
+    match debounce(peripherals.GPIOC.idr.read().idr13().bit_is_clear(), T) {
         Some(Debounce::Short) =>
             unsafe { FIR_MODE = (FIR_MODE + 1) % FIRX.len(); },
         Some(Debounce::Long) =>
