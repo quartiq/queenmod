@@ -36,7 +36,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "cortex-m"
-version = "0.5.7"
+version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "aligned 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -136,7 +136,7 @@ name = "panic-itm"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "cortex-m 0.5.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cortex-m 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -162,7 +162,7 @@ name = "queenmod"
 version = "0.1.0"
 dependencies = [
  "built 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "cortex-m 0.5.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cortex-m 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-rt 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "panic-abort 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "panic-itm 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -232,7 +232,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bare-metal 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "cortex-m 0.5.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cortex-m 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-rt 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "vcell 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -337,7 +337,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum built 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "61f5aae2fa15b68fbcf0cbab64e659a55d10e9bacc55d3470ef77ae73030d755"
 "checksum cc 1.0.25 (registry+https://github.com/rust-lang/crates.io-index)" = "f159dfd43363c4d08055a07703eb7a3406b0dac4d0584d96965a3262db3c9d16"
 "checksum cfg-if 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "0c4e7bb64a8ebb0d856483e1e682ea3422f883c5f5615a90d51a2c82fe87fdd3"
-"checksum cortex-m 0.5.7 (registry+https://github.com/rust-lang/crates.io-index)" = "4573199c5b1e9b0eeae418b46f7c0af5fdf11b3057f83880810dfef68dd1dcb5"
+"checksum cortex-m 0.5.8 (registry+https://github.com/rust-lang/crates.io-index)" = "dab2164a0fc216781a47fc343347365112ae6917421d3fa4bac6faf0fbaaaec7"
 "checksum cortex-m-rt 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)" = "d86cfa89fa220d3cb7a41133693e2d302d18e9a632298ffb3738f175c8c12325"
 "checksum cortex-m-rt-macros 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "3139fdadccaa0db6fa96637678ced9b0b97e4f10047c9ab603d125048e107d1a"
 "checksum git2 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)" = "591f8be1674b421644b6c030969520bc3fa12114d2eb467471982ed3e9584e71"
