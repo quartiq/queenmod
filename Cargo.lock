@@ -166,7 +166,7 @@ dependencies = [
  "cortex-m-rt 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "panic-abort 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "panic-itm 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "stm32f4 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "stm32f4 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -228,7 +228,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "stm32f4"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bare-metal 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -361,7 +361,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 "checksum semver-parser 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 "checksum serde 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)" = "84257ccd054dc351472528c8587b4de2dbf0dc0fe2e634030c1a90bfdacebaa9"
-"checksum stm32f4 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "76ec8196656f425ae374a6055826746e75ce12d0220a5cb2db4dbc509dfdda27"
+"checksum stm32f4 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0a2c7606593e8020bdf9a1b725ce46bb8bae4095bef789eef97cf35554b825b8"
 "checksum syn 0.15.9 (registry+https://github.com/rust-lang/crates.io-index)" = "b10ee269228fb723234fce98e9aac0eaed2bd5f1ad2f6930e8d5b93f04445a1a"
 "checksum time 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)" = "d825be0eb33fda1a7e68012d51e9c7f451dc1a69391e7fdc197060bb8c56667b"
 "checksum toml 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)" = "4a2ecc31b0351ea18b3fe11274b8db6e4d82bce861bbb22e6dbed40417902c65"
