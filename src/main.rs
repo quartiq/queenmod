@@ -15,8 +15,6 @@ use cortex_m::iprint;
 use cortex_m_rt::{entry, exception};
 use stm32f4::{stm32f446, stm32f446::interrupt};
 
-const N_SAMPLES: usize = 16;
-
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => ({
@@ -102,146 +100,58 @@ fn rcc_init(peripherals: &mut stm32f446::Peripherals) {
     // Set up peripheral clocks
     rcc.ahb1enr.modify(|_, w|
         w.gpioaen().enabled()
-         .gpiocen().enabled()
-         .dma2en().enabled()
+         .dma1en().enabled()
     );
     rcc.apb1enr.modify(|_, w|
-        w.tim2en().enabled()
-         .dacen().enabled()
-    );
-    rcc.apb2enr.modify(|_, w|
-        w.adc1en().enabled()
+        w.tim3en().enabled()
     );
 }
 
-/// Set up the systick to provide a 1ms timebase
-fn systick_init(syst: &mut stm32f446::SYST) {
-    syst.set_reload((168_000_000 / 8) / 1000);
-    syst.clear_current();
-    syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::External);
-    syst.enable_interrupt();
-    syst.enable_counter();
+/// Set IOs
+fn io_init(gpioa: &mut stm32f446::GPIOA) {
+    // PA6: TIM3_CH1
+    gpioa.moder.modify(|_, w| w.moder6().alternate());
+    gpioa.otyper.modify(|_, w| w.ot6().push_pull());
+    gpioa.ospeedr.modify(|_, w| w.ospeedr6().low_speed());
+    gpioa.afrl.modify(|_, w| w.afrl6().af2());
 }
 
-/// Set up LED for TIM2 OC1
-fn io_init(gpioa: &mut stm32f446::GPIOA, gpioc: &mut stm32f446::GPIOC) {
-    // PA15: TIM2
-    gpioa.moder.modify(|_, w| w.moder15().alternate());
-    gpioa.otyper.modify(|_, w| w.ot15().push_pull());
-    gpioa.ospeedr.modify(|_, w| w.ospeedr15().low_speed());
-    gpioa.afrh.modify(|_, w| w.afrh15().af1());
+const M_PWM: u32 = 8;
 
-    // PA0: ADC_IN0
-    gpioa.moder.modify(|_, w| w.moder0().analog());
-    gpioa.pupdr.modify(|_, w| w.pupdr0().floating());
-
-    // PA4: DAC_OUT1
-    gpioa.moder.modify(|_, w| w.moder4().analog());
-    gpioa.pupdr.modify(|_, w| w.pupdr4().floating());
-
-    // PA5: DAC_OUT2
-    gpioa.moder.modify(|_, w| w.moder5().analog());
-    gpioa.pupdr.modify(|_, w| w.pupdr5().floating());
-
-    // PA10: ISR duty
-    gpioa.moder.modify(|_, w| w.moder10().output());
-    gpioa.otyper.modify(|_, w| w.ot10().push_pull());
-    gpioa.ospeedr.modify(|_, w| w.ospeedr10().low_speed());
-
-    // PC13: MODE (user button), external pullup
-    gpioc.moder.modify(|_, w| w.moder13().input());
-    gpioc.pupdr.modify(|_, w| w.pupdr13().floating());
-}
-
-/// Set up timer TIM2 to emit square pulses on OC1
-fn tim2_init(tim2: &mut stm32f446::TIM2) {
-    tim2.psc.write(|w| unsafe { w.psc().bits(4 * (12 + 3) - 1) });
-    tim2.arr.write(|w| w.arr().bits(N_SAMPLES as u32 - 1));
-    tim2.ccr1.write(|w| w.ccr1().bits(N_SAMPLES as u32 / 2));
-    tim2.ccmr1_output.modify(|_, w| unsafe {
-        w.oc1m().bits(0b110)
-         .oc1pe().set_bit() });
-    tim2.ccer.modify(|_, w|
+/// Set up timer TIM3 to PWM on OC1
+fn tim3_init(tim3: &mut stm32f446::TIM3) {
+    tim3.psc.write(|w| unsafe { w.psc().bits(0) });
+    tim3.arr.write(|w| w.arr().bits((1 << M_PWM) - 1));
+    tim3.ccr1.write(|w| w.ccr1().bits(0));
+    tim3.ccmr1_output.modify(|_, w| unsafe {
+        w.oc1m().bits(0b110)  // PWM1
+         .oc1pe().set_bit() }); // CCR1 preload
+    tim3.ccer.modify(|_, w|
         w.cc1p().clear_bit()  // active high
          .cc1e().set_bit());  // enable
-    tim2.egr.write(|w| w.ug().set_bit());
-    tim2.cr2.modify(|_, w|
-        w.mms().bits(0b010));  // UEV
-    tim2.cr1.modify(|_, w| unsafe {
-        w.ckd().bits(0)  // div1
-         .dir().clear_bit()  // up
-         .arpe().set_bit()  // auto preload
-         .cen().set_bit() });  // enable
+    tim3.cr2.modify(|_, w|
+        w.mms().reset()   // Master mode reset TRGO=EGR
+         .ccds().on_update());  // DMA on update
+    tim3.dier.modify(|_, w|
+        w.cc1de().set_bit());  // CC1 event DMA
+    tim3.dcr.modify(|_, w| unsafe {
+        w.dba().bits(0x34 >> 2)  // start at ccr1
+         .dbl().bits(0) });  // one xfer
+    tim3.egr.write(|w| w.ug().update());
+    tim3.cr1.modify(|_, w|
+        w.ckd().not_divided()
+         .dir().up()
+         .arpe().enabled()  // auto preload
+         .cen().enabled());  // enable
 }
 
-/// Set up ADC1 to sample from Pxx
-fn adc1_init(adc_common: &mut stm32f446::ADC_COMMON, adc1: &mut stm32f446::ADC1) {
-    adc_common.ccr.modify(|_, w|
-        w.adcpre().div4()
-         .tsvrefe().enabled());
-    adc1.cr2.modify(|_, w|
-        w.cont().single()
-         .exten().rising_edge()
-         .dma().enabled()
-         .eocs().each_sequence()
-         .align().right()
-         .extsel().tim2trgo()
-         .dds().continuous()
-         .adon().enabled());
-    adc1.cr1.modify(|_, w|
-        w.res().twelve_bit()
-         .scan().enabled()
-         .discen().disabled()
-         .discnum().bits(0));
-    adc1.smpr2.modify(|_, w|
-        w.smp0().cycles3());
-    adc1.smpr1.modify(|_, w|
-        w.smp18().cycles480());
-    adc1.sqr3.modify(|_, w| unsafe {
-        w.sq1().bits(0)
-         .sq2().bits(0)
-         .sq3().bits(0)
-         .sq4().bits(0)
-         .sq5().bits(0)
-         .sq6().bits(0) });
-    adc1.sqr2.modify(|_, w| unsafe {
-        w.sq7().bits(0)
-         .sq8().bits(0)
-         .sq9().bits(0)
-         .sq10().bits(0)
-         .sq11().bits(0)
-         .sq12().bits(0) });
-    adc1.sqr1.modify(|_, w| unsafe {
-        w.sq13().bits(0)
-         .sq14().bits(0)
-         .sq15().bits(0)
-         .sq16().bits(0)
-         .l().bits(N_SAMPLES as u8 - 1) });
-}
+const N_PWM: usize = 1 << 8;
+static mut PWM_SAMPLES: [[u16; N_PWM]; 2] = [[0; N_PWM]; 2];
 
-/// Set up LED for TIM2 OC1
-fn dac_init(dac: &mut stm32f446::DAC) {
-    dac.cr.modify(|_, w|
-        w.tsel1().tim2_trgo()
-         .wave1().disabled()
-         .mamp1().bits(0)
-         .ten1().enabled()
-         .en1().enabled()
-         .boff1().enabled()
-         .tsel2().tim2_trgo()
-         .wave2().disabled()
-         .mamp2().bits(0)
-         .ten2().enabled()
-         .en2().enabled()
-         .boff2().enabled());
-}
-
-static mut ADC_SAMPLES: [FIRState; 2] = [[0; N_SAMPLES]; 2];
-
-/// Set up both DAC channels
-fn dma2_init(dma2: &mut stm32f446::DMA2, par: u32) {
-    dma2.s4cr.modify(|_, w|
-        w.chsel().bits(0)  // ADC1
+/// Set up PWM DMA
+fn dma1_init(dma1: &mut stm32f446::DMA1, par: u32) {
+    dma1.s4cr.modify(|_, w|
+        w.chsel().bits(5)  // TIM3_CH1/TRG
          .dbm().enabled()
          .pl().very_high()
          .msize().half_word()
@@ -251,20 +161,20 @@ fn dma2_init(dma2: &mut stm32f446::DMA2, par: u32) {
          .circ().enabled()
          .mburst().single()
          .pburst().single()
-         .dir().peripheral_to_memory()
+         .dir().memory_to_peripheral()
          .pfctrl().dma()
-         .tcie().enabled()
-         .teie().enabled()
-         .dmeie().enabled()
+         .tcie().enabled()  // transfer complete
+         .teie().enabled()  // error
+         .dmeie().enabled()  // direct mode error
     );
-    dma2.s4par.write(|w| w.pa().bits(par));
-    let mar0 = unsafe { &ADC_SAMPLES[0] } as *const _ as u32;
-    dma2.s4m0ar.write(|w| w.m0a().bits(mar0));
-    let mar1 = unsafe { &ADC_SAMPLES[1] } as *const _ as u32;
-    dma2.s4m1ar.write(|w| w.m1a().bits(mar1));
-    dma2.s4ndtr.write(|w| w.ndt().bits(N_SAMPLES as u16));
-    dma2.s4fcr.modify(|_, w| w.dmdis().enabled());
-    dma2.s4cr.modify(|_, w| w.en().enabled());
+    dma1.s4par.write(|w| w.pa().bits(par));
+    let mar0 = unsafe { &PWM_SAMPLES[0] } as *const _ as u32;
+    dma1.s4m0ar.write(|w| w.m0a().bits(mar0));
+    let mar1 = unsafe { &PWM_SAMPLES[1] } as *const _ as u32;
+    dma1.s4m1ar.write(|w| w.m1a().bits(mar1));
+    dma1.s4ndtr.write(|w| w.ndt().bits(N_PWM as u16));
+    dma1.s4fcr.modify(|_, w| w.dmdis().enabled());  // direct mode enabled
+    dma1.s4cr.modify(|_, w| w.en().enabled());
 }
 
 #[entry]
@@ -274,249 +184,83 @@ fn main() -> ! {
         let mut core_peripherals = cortex_m::Peripherals::take().unwrap();
 
         rcc_init(&mut peripherals);
-        systick_init(&mut core_peripherals.SYST);
         println!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
         println!("Platform {}", build_info::TARGET);
         println!("Built on {}", build_info::BUILT_TIME_UTC);
         println!("{}", build_info::RUSTC_VERSION);
-        println!("Ready.\n");
-
-        io_init(&mut peripherals.GPIOA, &mut peripherals.GPIOC);
-        dac_init(&mut peripherals.DAC);
-        dma2_init(&mut peripherals.DMA2, &peripherals.ADC1.dr as *const _ as u32);
-        stm32f446::NVIC::unpend(stm32f446::Interrupt::DMA2_STREAM4);
-        core_peripherals.NVIC.enable(stm32f446::Interrupt::DMA2_STREAM4);
-        adc1_init(&mut peripherals.ADC_COMMON, &mut peripherals.ADC1);
-        tim2_init(&mut peripherals.TIM2);
 
         core_peripherals.DWT.enable_cycle_counter();
+        io_init(&mut peripherals.GPIOA);
+
+        dma1_init(&mut peripherals.DMA1, &peripherals.TIM3.dmar as *const _ as u32);
+        stm32f446::NVIC::unpend(stm32f446::Interrupt::DMA1_STREAM4);
+        core_peripherals.NVIC.enable(stm32f446::Interrupt::DMA1_STREAM4);
+        tim3_init(&mut peripherals.TIM3);
     });
     loop {
         cortex_m::asm::wfi();
     }
 }
 
-/*
-#[link_name = "llvm.arm.smlald"]
-pub fn arm_smlald(a: i16x2, b: i16x2, c: i64) -> i64;
-*/
-
-fn macc(y0: i16, x: &[i16], a: &[i16], shift: u8) -> i16 {
-    let y = match () {
-        #[cfg(not(feature = "simd"))]
-        _ => {
-            ((y0 as i32) << shift) + x.iter()
-              .zip(a.iter())
-              .map(|(&i, &j)| (i as i32) * (j as i32))
-              .sum::<i32>()
-        },
-        #[cfg(feature = "simd")]
-        _ => {
-            assert_eq!(x.len(), a.len());
-            let mut y = ((y0 as i32) << shift, 0i32);
-            unsafe {
-                for i in 0..x.len()/2 {
-                    let xi = *(x.get_unchecked(i*2) as *const _ as *const i32);
-                    let ai = *(a.get_unchecked(i*2) as *const _ as *const i32);
-                    asm!("smlald $0, $1, $2, $3"
-                        : "=r"(y.0), "=r"(y.1)
-                        : "r"(xi), "r"(ai), "0"(y.0), "1"(y.1));
-                }
-            }
-            if x.len() & 1 == 1 {
-                y.0 += (x[x.len() - 1] as i32)*(a[a.len() - 1] as i32);
-            }
-            y.0
-        }
-    };
-    (y >> shift).max(i16::min_value() as i32).min(i16::max_value() as i32) as i16
+struct DDSM3 {
+    lfsr: u16,
+    a: [u16; 3],
+    c: [i8; 2],
 }
 
-type IIRState = [i16; 5];
-
-struct IIR {
-    ba: IIRState,
-    shift: u8,
-}
-
-impl IIR {
-    fn update(&self, xy: &mut IIRState, x0: i16) -> i16 {
-        xy.rotate_right(1);
-        xy[0] = x0;
-        let y0 = macc(0, xy, &self.ba, self.shift);
-        xy[xy.len()/2] = y0;
-        y0
+impl DDSM3 {
+    fn process(&mut self, x: u16) -> i8 {
+        let bit = ((self.lfsr >> 15) ^ (self.lfsr >> 14) ^
+                   (self.lfsr >> 12) ^ (self.lfsr >> 3)) & 1;
+        self.lfsr = (self.lfsr << 1) ^ bit;
+        let (x, c2) = self.a[0].overflowing_add(x ^ bit);
+        self.a[0] = x;
+        let (x, c1) = self.a[1].overflowing_add(x);
+        self.a[1] = x;
+        let (x, c0) = self.a[2].overflowing_add(x);
+        self.a[2] = x;
+        let c1 = c0 as i8 - self.c[0] + c1 as i8;
+        self.c[0] = c0 as i8;
+        let c2 = c1 - self.c[1] + c2 as i8;
+        self.c[1] = c1;
+        c2
     }
 }
 
-type FIRState = [i16; N_SAMPLES];
-
-struct FIR {
-    a: FIRState,
-    offset: i16,
-    shift: u8,
-}
-
-impl FIR {
-    #[inline(never)]
-    fn apply(&self, x: &FIRState) -> i16 {
-        macc(self.offset, x, &self.a, self.shift)
-    }
-}
-
-static mut FIR_MODE: usize = 0;
-const FIR_LEN: usize = 5;
-static FIRX: [[FIR; 2]; FIR_LEN] = [
-    [ // fundamental t_mod
-        FIR{ shift: 11, offset: 0, a:
-                [0, 1247, 2304, 3011, 3259, 3011, 2304, 1247,
-                    0, -1247, -2304, -3011, -3259, -3011, -2304, -1247] },
-        FIR{ shift: 11, offset: 0, a:
-                [-3259, -3011, -2304, -1247, 0, 1247, 2304, 3011,
-                    3259, 3011, 2304, 1247, 0, -1247, -2304, -3011] },
-    ],
-    [ // second harmonic t_mod/2
-        FIR{ shift: 11, offset: 0, a:
-                [0, 2399, 3393, 2399, 0, -2399, -3393, -2399,
-                    0, 2399, 3393, 2399, 0, -2399, -3393, -2399] },
-        FIR{ shift: 11, offset: 0, a:
-                [-3393, -2399, 0, 2399, 3393, 2399, 0, -2399,
-                    -3393, -2399, 0, 2399, 3393, 2399, 0, -2399] },
-    ],
-    [ // third harmonic t_mod/3
-        FIR{ shift: 11, offset: 0, a:
-                [0, 3011, 2304, -1247, -3259, -1247, 2304, 3011,
-                    0, -3011, -2304, 1247, 3259, 1247, -2304, -3011] },
-        FIR{ shift: 11, offset: 0, a:
-                [-3259, -1247, 2304, 3011, 0, -3011, -2304, 1247,
-                    3259, 1247, -2304, -3011, 0, 3011, 2304, -1247] },
-    ],
-    [ // square fundamental
-        FIR{ shift: 0, offset: 0, a:
-                [1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1] },
-        FIR{ shift: 0, offset: 0, a:
-                [1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1] },
-    ],
-    [ // zero and dc
-        FIR{ shift: 0, offset: 0, a:
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-        FIR{ shift: 4, offset: 0, a:
-                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] },
-    ],
-];
-
-static mut IIR_MODE: usize = 0;
-const IIR_LEN: usize = 3;
-static IIRX: [[IIR; 2]; IIR_LEN] = [
-    [// butter(4, .2)
-        IIR{ shift: 12, ba: [200, 400, 200, 4295, -1213] },
-        IIR{ shift: 12, ba: [4096, 8192, 4096, 5410, -2592] },
-    ],
-    [ // id
-        IIR{ shift: 0, ba: [1, 0, 0, 0, 0] },
-        IIR{ shift: 0, ba: [1, 0, 0, 0, 0] },
-    ],
-    [ // PII
-        IIR{ shift: 13, ba: [400, 400, 0, 8184, 0] },
-        IIR{ shift: 0, ba: [1, 0, 0, 0, 0] },
-    ],
-];
+const N_COS: usize = 36;
+static COS: [i32; N_COS] = [
+    0xfae147, 0xf9035f, 0xf3782c, 0xea6acd, 0xde21ac, 0xcefc59,
+    0xbd70a3, 0xaa0705, 0x95567f, 0x800000, 0x6aa980, 0x55f8fa,
+    0x428f5c, 0x3103a6, 0x21de53, 0x159532, 0xc87d3, 0x6fca0,
+    0x51eb8, 0x6fca0, 0xc87d3, 0x159532, 0x21de53, 0x3103a6,
+    0x428f5c, 0x55f8fa, 0x6aa980, 0x7fffff, 0x95567f, 0xaa0705,
+    0xbd70a3, 0xcefc59, 0xde21ac, 0xea6acd, 0xf3782c, 0xf9035f];
 
 #[interrupt]
-fn DMA2_STREAM4() {
-    static mut IIR_STATE: [[IIRState; 2]; 2] = [[[0; 5]; 2]; 2];
+fn DMA1_STREAM4() {
+    static mut DSM: DDSM3 = DDSM3{ lfsr: 1, a: [0, 0, 0], c: [0, 0] };
+    static mut I: usize = 0;
     #[cfg(feature = "bkpt")]
     cortex_m::asm::bkpt();
     let mut peripherals = unsafe { stm32f446::Peripherals::steal() };
-    // let gpioa = &mut peripherals.GPIOA;
-    // gpioa.bsrr.write(|w| w.bs10().set());
 
-    let dma = &mut peripherals.DMA2;
+    let dma = &mut peripherals.DMA1;
     let hisr = dma.hisr.read();
 
-    /*
-    let adc = &mut peripherals.ADC1;
-    if adc.sr.read().ovr().bit_is_set() {
-        println!("x");
-        // adc.cr2.modify(|_, w| w.dma().clear_bit());
-        // dma.s4cr.modify(|_, w| w.en().disabled());
-        let mar = unsafe { &ADC_SAMPLES as *const _ } as u32;
-        dma.s4m0ar.write(|w| w.m0a().bits(mar));
-        dma.s4m1ar.write(|w| w.m1a().bits(mar + N_SAMPLES as u32*2));
-        dma.s4ndtr.write(|w| w.ndt().bits(N_SAMPLES as u16));
-        adc.sr.modify(|_, w| w.ovr().clear_bit());
-        //dma.s4cr.modify(|_, w| w.en().enabled());
-        //adc.cr2.modify(|_, w| w.dma().set_bit());
-        //return;
-    }
-
-    if hisr.teif4().bit_is_set() {
-        println!("t");
-    }
-    if hisr.dmeif4().bit_is_set() {
-        println!("d");
-    }
-    */
-
     if hisr.tcif4().bit_is_set() {
-        dma.hifcr.write(|w| w.ctcif4().set_bit());
         let ct = 1 - dma.s4cr.read().ct() as usize;
-        let mut y: [i16; 2] = [0; 2];
-        let a = unsafe { &ADC_SAMPLES[ct] };
-        let fir = &FIRX[unsafe { FIR_MODE }];
-        let iir = &IIRX[unsafe { IIR_MODE }];
-        for i in 0..2 {
-            y[i] = fir[i].apply(a);
-            for j in 0..2 {
-                y[i] = iir[j].update(&mut IIR_STATE[i][j], y[i]);
-            }
-            y[i] = (y[i] >> 4) + 0x800;
+        let c = COS[*I];
+        // let c = (c >> 8) + 0x800000;  // only dsm bit
+        for i in 0..N_PWM {
+            let y = (c >> 16) + DSM.process(c as u16) as i32;
+            unsafe { PWM_SAMPLES[ct][i] = y as u16 };
         }
-        peripherals.DAC.dhr12rd.write(|w| unsafe {
-            w.dacc1dhr().bits(y[0] as u16)
-             .dacc2dhr().bits(y[1] as u16) });
-
-        // let itm = &mut core_peripherals.ITM;
-        // while ! itm.stim[0].is_fifo_ready() {}
-        // itm.stim[0].write_u32(((y[1] as u32) << 16) | ((y[0] as u32) & 0xffff));
+        *I = (*I + 1) % N_COS;
+        dma.hifcr.write(|w| w.ctcif4().set_bit());
     }
-    // gpioa.bsrr.write(|w| w.br10().reset());
+
     #[cfg(feature = "bkpt")]
     cortex_m::asm::bkpt();
-}
-
-#[exception]
-fn SysTick() -> ! {
-    static mut T: u32 = 0;
-    let peripherals = unsafe { stm32f446::Peripherals::steal() };
-    match debounce(peripherals.GPIOC.idr.read().idr13().bit_is_clear(), T) {
-        Some(Debounce::Short) =>
-            unsafe { FIR_MODE = (FIR_MODE + 1) % FIRX.len(); },
-        Some(Debounce::Long) =>
-            unsafe { IIR_MODE = (IIR_MODE + 1) % IIRX.len(); },
-        None => ()
-    };
-}
-
-
-enum Debounce {
-    Short,
-    Long,
-}
-
-fn debounce(signal: bool, time: &mut u32) -> Option<Debounce> {
-    let t_long = 300;
-    let t_short = 40;
-    let (t, ret) = match (signal, *time) {
-        (true, t) if t < t_long => (t + 1, None),
-        (true, t) if t == t_long => (t + 1, Some(Debounce::Long)),
-        (false, t) if t > t_long => (t_short/2, None),
-        (false, t) if t >= t_short => (t_short/2, Some(Debounce::Short)),
-        (false, t) if t > 0 => (t - 1, None),
-        (_, t) => (t, None),
-    };
-    *time = t;
-    ret
 }
 
 #[exception]
