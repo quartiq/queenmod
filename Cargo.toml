@@ -16,7 +16,7 @@ panic-abort = "0.3"
 stm32f4 = { version = "0.6", features = ["stm32f446", "rt"] }
 
 [build-dependencies]
-built = "0.3"
+built = "0.4"
 
 [profile.dev]
 codegen-units = 1
